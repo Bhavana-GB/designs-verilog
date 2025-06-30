@@ -1,6 +1,8 @@
 import networkx as nx
+from tb_wrapped_cir import generate_wrapped_testbench
+# from sdf_wrapped_cir import generate_wrapped_sdf
 
-def build_custom_circular_and_graph(levels=3, width=3):
+def build_graph(levels=3, width=3):
     G = nx.DiGraph()
 
     # Add input pins
@@ -15,7 +17,7 @@ def build_custom_circular_and_graph(levels=3, width=3):
             if lvl == 1:
                 G.add_edge(f"d{i}", ff)
 
-    # Add AND gates between levels (custom circular connection)
+    # Add AND gates between levels
     for lvl in range(1, levels):
         for i in range(width):
             a_idx = i
@@ -37,14 +39,13 @@ def build_custom_circular_and_graph(levels=3, width=3):
 
     return G
 
-def generate_verilog_from_custom_graph(G, levels=3, width=3):
+def generate_v_wrapped(G, levels=3, width=3):
     codev = []
     inputs = [f"d{i}" for i in range(width)]
     outputs = [f"q{i}" for i in range(width)]
     wires = [n for n in G.nodes if G.nodes[n].get("type") in ["dff", "and"]]
 
-    # Module declaration
-    codev.append("module circular_and_circuit (")
+    codev.append("module wrapped_and_circuit (")
     codev.append(f"    input clk, {', '.join(inputs)},")
     codev.append(f"    output {', '.join(outputs)}")
     codev.append(");")
@@ -52,13 +53,13 @@ def generate_verilog_from_custom_graph(G, levels=3, width=3):
     if wires:
         codev.append(f"    wire {', '.join(wires)};")
 
-    # DFF instances
+    # DFF
     for node in G.nodes:
         if G.nodes[node].get("type") == "dff":
             d_src = list(G.predecessors(node))[0]
             codev.append(f"    dff_spec {node}_inst (.clk(clk), .d({d_src}), .q({node}));")
 
-    # AND gates (2-input only)
+    # AND gates (2 inputs)
     for node in G.nodes:
         if G.nodes[node].get("type") == "and":
             a, b = G.nodes[node]["inputs"]
@@ -82,8 +83,8 @@ module and_gate_2 (
 );
     assign y = a & b;
     specify
-        (a => y) = (1:1:1);
-        (b => y) = (1:1:1);
+        (a => y) = 1;
+        (b => y) = 1;
     endspecify
 endmodule
 `endcelldefine
@@ -108,18 +109,32 @@ endmodule
 """
 
 def main():
-    levels = 3
-    width = 3
+    # levels = 3
+    # width = 3
+    levels = int(input("Enter number of levels: "))
+    width = int(input("Enter number of FFs per level (rows): "))
 
-    G = build_custom_circular_and_graph(levels, width)
+    G = build_graph(levels, width)
 
-    with open("Python_Generated/wrapped_cir.v", "w") as f:
-        f.write("// Auto-generated circular AND + FF graph circuit\n\n")
+    with open("wrapped_cir.v", "w") as f:
+        f.write("//Python Generated\n")
         f.write(dff_spec_module())
-        f.write("\n\n")
+        f.write("\n")
         f.write(and_gate_2_module())
-        f.write("\n\n")
-        f.write(generate_verilog_from_custom_graph(G, levels, width))
+        f.write("\n")
+        f.write(generate_v_wrapped(G, levels, width))
+        print("Output written to wrapped_cir.v")
+    
+    tb_code = generate_wrapped_testbench(G)
+    with open("tb_wrapped_cir.v",'w') as f :
+        f.write("//Python Generated\n")
+        f.write(tb_code)
+        print("Output written to tb_wrapped_cir.v")
 
+    sdf_code = generate_wrapped_testbench(G)
+    with open("tb_wrapped_cir.v",'w') as f :
+        f.write("//Python Generated\n")
+        f.write(tb_code)
+        print("Output written to tb_wrapped_cir.v")
 if __name__ == "__main__":
     main()
